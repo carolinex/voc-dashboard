@@ -14,9 +14,9 @@ const API_URL = "https://esdr.cmucreatelab.org/api/v1";
 const CHANNELS =  [ "eCO2", "temp", "tVOC", "humidity" ];
 const CH_NAMES =  [ "Equivalent CO2", "Temperature", "Volatile Compounds", "Humidity" ];
 const CH_THRESHOLDS =  [
-  [0, 200, 400, 600, 750, 1000, 2500, 5000],
+  [5000, 2500, 1000, 750, 600, 400, 200, 0],//[0, 200, 400, 600, 750, 1000, 2500, 5000]
   [-10, -5, 0, 5, 10, 18, 25, 35],
-  [0, 40, 120, 160, 300, 500, 750, 1000],
+  [2000, 1000, 700, 500, 300, 180, 90, 0],//[0, 40, 120, 160, 300, 500, 750, 1000]
   [70, 60, 50, 40, 30, 20, 10, 0]
 ];
 const FEEDS = [ { name: "Braddock", id: "26443" },
@@ -37,7 +37,7 @@ export const AirViz = (props: IProps) => {
       let loadData = (ch) => {
         let selectedFeedID = props.feedID;
         let selectedChannel = CHANNELS[ch];
-        let selectedLevel = 11;
+        let selectedLevel = 12;
         let selectedOffset = Math.floor(props.period.min / (Math.pow(2,selectedLevel)*512));
         let tileURL = API_URL + "/feeds/" + selectedFeedID +
             "/channels/" + selectedChannel + "/tiles/" +
@@ -46,9 +46,12 @@ export const AirViz = (props: IProps) => {
         channelData[ch] = null;
 
         d3.json(tileURL).then(function(resp){
+          //console.log(resp)
           switch (resp.code) {
+
               case 200:
                 channelData[ch] = resp.data;
+                console.log(new Date(resp.data.data[resp.data.data.length-1][0]*1000));
                 buildChannelViz(ch);
                 return; // console.log(resp.data);
               case 401:
@@ -77,7 +80,7 @@ export const AirViz = (props: IProps) => {
           .interpolate(d3.interpolateRgb);
 
         filteredData = data.filter((d) => {
-          return d[0] >= (props.period.max - (9*24*60*60)) && d[0] <= props.period.max;
+          return (Number(d[0]) >= Number(props.period.min) && Number(d[0]) <= Number(props.period.max));
         });
 
         w = parseInt(d3.select('#main').style('width'));
@@ -87,14 +90,17 @@ export const AirViz = (props: IProps) => {
 
         d3.select("#ch-"+ch).remove();
 
-        let lastDay = new Date(filteredData[filteredData.length-1][0]*1000);
+        let scaleDay1 = new Date(props.period.min*1000);
+        let scaleDay2 = new Date(props.period.max*1000);
+
+        let lastDay = new Date(scaleDay2);//filteredData[filteredData.length-1][0]*1000);
         let firstDay = new Date(lastDay.getFullYear(),lastDay.getMonth(),lastDay.getDate()-7,0,0,0);
         let day = new Date(lastDay.getFullYear(),lastDay.getMonth(),lastDay.getDate()-7,0,0,0);
 
         let scaleTime = d3.scaleTime().range([40, h]);
         scaleTime.domain([
-          Math.floor(lastDay.getTime()/1000),
-          Math.floor(firstDay.getTime()/1000)
+          Math.floor(scaleDay1.getTime()/1000),
+          Math.floor(scaleDay2.getTime()/1000)
         ]);
 
         let axisY1, axisY2;
@@ -110,7 +116,7 @@ export const AirViz = (props: IProps) => {
             return scaleTime(day.getTime()/1000);
           })
           .attr("width", 75)
-          .attr("height", h/7);
+          .attr("height", (h-40)/7);
 
           axisY1.append("text")
             .attr("y", function(d,i){
@@ -122,7 +128,7 @@ export const AirViz = (props: IProps) => {
 
           axisY1.append("text")
             .attr("y", function(d,i){
-              return scaleTime(day.getTime()/1000) + h/14 + 16;
+              return scaleTime(day.getTime()/1000) + (h-40)/14 + 16;
             })
             .attr("x",37)
             .attr("text-anchor","middle")
@@ -216,12 +222,11 @@ export const AirViz = (props: IProps) => {
 
       // build channels once  on start
       CHANNELS.forEach((ch, i) => {
-        console.log("channel '"+ch+"' loaded")
         loadData(i);
       });
 
     }
-  },[props.feedID, d3Container.current])
+  },[ props.feedID, d3Container.current ])
 
   return (
     <svg
@@ -238,8 +243,10 @@ class App extends Component {
   constructor(props) {
     super(props);
 
-    this.period = { min: Math.floor(Date.now()/1000) - (9*24*60*60),
-                    max: Math.floor(Date.now()/1000) - (1*24*60*60)};
+    this.period = { min: Math.floor(Date.now()/1000) - (7*24*60*60),
+                    max: Math.floor(Date.now()/1000) - (0*24*60*60)};
+
+
     this.state = {
       feed: 0
     }
@@ -252,7 +259,8 @@ class App extends Component {
   }
 
   render(){
-    console.log("feed: "+this.state.feed);
+    //console.log("feed: "+this.state.feed);
+    //console.log(new Date(this.period.max*1000));
 
     /* This is the overall structure of the page */
     return (
